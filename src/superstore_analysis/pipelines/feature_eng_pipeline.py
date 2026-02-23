@@ -7,6 +7,7 @@ from superstore_analysis.datasets import DataLoader
 class FeatureEng(TransformerMixin, BaseEstimator):
 	def __init__(self, exclude_unused: bool = True):
 		self.exclude_features = ['Order_ID', 'Customer_Name','Product_Name', 'Order_Date', 'Ship_Date', 'Country/Region']
+	
 	def fit(self, X, y=None):
 		return self
 	
