@@ -5,21 +5,20 @@ from sklearn.base import TransformerMixin, BaseEstimator
 from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
 from sklearn.preprocessing import OrdinalEncoder, MinMaxScaler, OneHotEncoder
-
+from typing import List
 
 
 class Encoder(BaseEstimator, TransformerMixin):
-	def __init__(self):
-		self.one_hot_cols = ['Category', 'Sub-Category', 'City', 'State', 'Region']
-		self.ordinal_enc_cols = ['Ship_Mode',
-								'Segment', 'Product_ID', 'Customer_ID']
+	def __init__(self, one_hot_cols: List[str], ordinal_enc_cols: List[str]):
+		self._one_hot_cols = one_hot_cols
+		self._ordinal_enc_cols = ordinal_enc_cols
 		self.ct = None  # Initialize ColumnTransformer here
 
 	def fit(self, X, y=None):
 		# Initialize ColumnTransformer in fit to learn categories from training data
 		self.ct = ColumnTransformer([
-			('one_hot_encoder', OneHotEncoder(), self.one_hot_cols),
-			('ordinal_encoder', OrdinalEncoder(), self.ordinal_enc_cols)
+			('one_hot_encoder', OneHotEncoder(handle_unknown='ignore'), self._one_hot_cols),
+			('ordinal_encoder', OrdinalEncoder(), self._ordinal_enc_cols)
 		])
 		self.ct.fit(X)  # Fit the ColumnTransformer
 		return self
@@ -29,7 +28,9 @@ class Encoder(BaseEstimator, TransformerMixin):
 			raise RuntimeError("Encoder not fitted. Call fit() first.")
 
 		# Transform using the fitted ColumnTransformer
-		transformed_data = self.ct.transform(X).toarray()
+		transformed_data = self.ct.transform(X)
+		if hasattr(transformed_data, "toarray"):
+			return transformed_data.toarray()
 		return transformed_data
 
 class DataProcessor():
@@ -63,11 +64,13 @@ class DataProcessor():
 		self, 
 		df: pd.DataFrame, 
 		fit_pipe: bool = True,
-		include_decomposition: bool = False,
 	) -> np.array:
+		
+		ohe_cols = ['Category', 'Sub-Category', 'City', 'State', 'Region']
+		ordinal_cols = ['Ship_Mode', 'Segment']
 
 		pipe = Pipeline(steps=[
-			('encoder', Encoder()),
+			('encoder', Encoder(one_hot_cols=ohe_cols, ordinal_enc_cols=ordinal_cols)),
 			('scaler', MinMaxScaler()),
 		])
 

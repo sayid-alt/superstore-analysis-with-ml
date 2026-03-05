@@ -7,7 +7,7 @@ from superstore_analysis.datasets import DataLoader
 class FeatureEng(TransformerMixin, BaseEstimator):
 	def __init__(self, exclude_unused: bool = True):
 		self.exclude_features = ['Order_ID', 'Customer_Name','Product_Name', 'Order_Date', 'Ship_Date', 'Country/Region']
-	
+		self._exclude_unused = exclude_unused
 	def fit(self, X, y=None):
 		return self
 	
@@ -24,6 +24,7 @@ class FeatureEng(TransformerMixin, BaseEstimator):
 			Mean_Sales_Month=pd.NamedAgg(column='Sales', aggfunc='max'),
 		).reset_index()
 
+		# merge sales_agg_in_month to be one data frame
 		X = X.merge(sales_agg_in_month, on='Month_Order')
 
 		# Add sum of sales by product IDs
@@ -35,7 +36,13 @@ class FeatureEng(TransformerMixin, BaseEstimator):
 			by='Sub-Category').agg(sub_category_sales=('Sales', 'sum'))
 		X = X.merge(total_sales_sub_category, on='Sub-Category')
 
-		X = X.drop(columns=self.exclude_features)
+		if self._exclude_unused:
+			logger.info(f"Excluding features: {self.exclude_features}")
+			X = X.drop(columns=self.exclude_features)
+
 		return X
+
+
+
 
 
