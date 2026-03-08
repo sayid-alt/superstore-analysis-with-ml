@@ -119,7 +119,7 @@ class OrderPredictionInfer:
 			diff_pred = self._est.predict(X_infer.iloc[-1, :].to_frame().T)
 
 			# Define final prediction
-			order_pred = diff_pred[0] + int(original_target[-1])
+			order_pred = round(diff_pred[0]) + int(original_target[-1])
 
 			# store new prediction
 			new_date = data_infer.index[-1] + pd.Timedelta(days=1)
@@ -128,7 +128,7 @@ class OrderPredictionInfer:
 
 			new_row_dict = {col: 0 for col in data_infer.columns}
 			new_row_dict['Order_Count'] = order_pred
-			new_row_dict['Order_Diff'] = int(diff_pred[0])
+			new_row_dict['Order_Diff'] = round(diff_pred[0])
 
 			value_refs = data_infer.groupby(by='Day_of_Year').agg(
 				Sales_Avg=('Sales_Avg', 'mean'),
@@ -142,8 +142,7 @@ class OrderPredictionInfer:
 			new_row_dict['Discount_Avg'] = value_refs.loc[(doy, 'Discount_Avg')]
 			new_row_dict['Days_Shipping_Avg'] = value_refs.loc[(doy, 'Days_Shipping_Avg')]
 			new_row_dict['Postal_Code'] = value_refs.loc[(doy, 'Postal_Code')]
-			new_row_dict['Order_Diff'] = (
-				value_refs.loc[(doy, 'Order_Diff')] + diff_pred[0])/2
+			new_row_dict['Order_Diff'] = round((value_refs.loc[(doy, 'Order_Diff')] + diff_pred[0])/2)
 
 			new_row_df = pd.DataFrame([new_row_dict], index=[new_date])
 

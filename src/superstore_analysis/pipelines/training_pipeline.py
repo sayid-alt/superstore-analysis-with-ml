@@ -19,7 +19,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.ensemble import RandomForestRegressor
 from typing import List
 from loguru import logger
-from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error
+from sklearn.metrics import mean_absolute_error, mean_absolute_percentage_error, mean_squared_error, root_mean_squared_error
 
 from superstore_analysis.pipelines.feature_eng_pipeline import FeatureEng
 from superstore_analysis.processor import Encoder
@@ -307,8 +307,9 @@ class OrderPredictivePipeline:
 				
 				train_set = (X_train_reg, y_train_reg)
 				test_set = (X_test_reg, y_test_reg)
+				train_unshuffled_set = (train_reg.drop(columns=self._target), train_reg.loc[:, self._target].values)
 
-				return train_set, test_set
+				return train_unshuffled_set, train_set, test_set
 		
 		# pipeline data transformation
 		pipeline = Pipeline([
@@ -320,7 +321,7 @@ class OrderPredictivePipeline:
 
 		# store necessary attributes for later use
 		splitter = Splitter()
-		self.train_set, self.test_set = splitter.fit_transform(prepared_data)
+		self.train_unshuffled_set, self.train_set, self.test_set = splitter.fit_transform(prepared_data)
 		self.target_col = splitter._target
 		self.original_target_col = splitter._original_target
 
@@ -360,6 +361,7 @@ class OrderPredictivePipeline:
                     verbose=3)
 
 		self.estimator = grid_search.fit(X_train, y_train)
+		self._estimator = self.estimator.best_estimator_
 		return self.estimator
 
 	@property
@@ -367,6 +369,7 @@ class OrderPredictivePipeline:
 		if self.estimator is None:
 			print("No CV results found. Please run the train method first.")
 			return None
+			
 		cv_results = self.estimator.cv_results_
 		add_data = {
                     'mean_test_score': cv_results['mean_test_score'] * -1,
@@ -376,9 +379,9 @@ class OrderPredictivePipeline:
 		results_df = pd.concat([results_df, pd.DataFrame(add_data)], axis=1)
 		return results_df
 	
-	def evaluate(self):
-		X_train, X_test = self.train_set[0], self.test_set[0]
-		y_train, y_test = self.train_set[1], self.test_set[1]
+	def evaluate(self, saving_model: bool = True):
+		X_train, X_test = self.train_unshuffled_set[0], self.test_set[0]
+		y_train, y_test = self.train_unshuffled_set[1], self.test_set[1]
 
 		# define original target before differencing
 		train_original = X_train.loc[:, self.original_target_col].values
@@ -388,39 +391,64 @@ class OrderPredictivePipeline:
 		X_train = X_train.drop(columns=[self.original_target_col])
 		X_test = X_test.drop(columns=[self.original_target_col])
 
-		best_estimator = self.estimator.best_estimator_
-		best_estimator.fit(X_train, y_train)
+		# fit best model
+		self._estimator.fit(X_train, y_train)
 
 		# saving best model
-		model_save_dir = script_dir.parents[2] / 'models'
-		model_save_path = os.path.join(model_save_dir, 'regression_model.pkl')
-		os.makedirs(model_save_dir, exist_ok=True)
-		with open(model_save_path, 'wb') as f:
-			pickle.dump(best_estimator, f)
+		if saving_model:
+			model_save_dir = script_dir.parents[2] / 'models'
+			model_save_path = os.path.join(model_save_dir, 'regression_model.pkl')
+			os.makedirs(model_save_dir, exist_ok=True)
+			with open(model_save_path, 'wb') as f:
+				pickle.dump(self._estimator, f)
 
 		# predict differencing
-		y_train_pred = best_estimator.predict(X_train)
-		y_test_pred = best_estimator.predict(X_test)
+		y_train_pred = self._estimator.predict(X_train)
+		y_test_pred = self._estimator.predict(X_test)
 
 		# predict final value
 		y_train_pred = train_original + y_train_pred.astype(int)
 		y_test_pred = test_original + y_test_pred.astype(int)
 
-		# get mae score
+		# mae score
 		mae = mean_absolute_error(train_original, y_train_pred)
 		mae_test = mean_absolute_error(test_original, y_test_pred)
 
+		# MAPE Score
 		mape = mean_absolute_percentage_error(train_original, y_train_pred)
 		mape_test = mean_absolute_percentage_error(test_original, y_test_pred)
 
+		# RMSE Score
+		rmse = root_mean_squared_error(train_original, y_train_pred)
+		rmse_test = root_mean_squared_error(test_original, y_test_pred)
+
+		# mse score
+		mse = mean_squared_error(train_original, y_train_pred)
+		mse_test = mean_squared_error(test_original, y_test_pred)
 
 		return (y_train_pred, y_test_pred), {
-			'model': best_estimator,
-			'model_name': best_estimator.__class__.__name__,
-			'mae': mae,
-			'mae_test': mae_test,
-			'mape': mape,
-			'mape_test': mape_test,
+			'model_metadata': {
+                'model': self._estimator,
+                'model_name': self._estimator.__class__.__name__,
+			},
+			'metrics_eval': {
+				'mae': {
+					'train': mae,
+					'test': mae_test
+				},
+				'mape %': {
+					'train': mape,
+					'test': mape_test
+				},
+				'rmse': {
+					'train': rmse,
+					'test': rmse_test
+				},
+				'mse': {
+					'train': mse,
+					'test': mse_test
+				}
+			}
 		}
 
 	
