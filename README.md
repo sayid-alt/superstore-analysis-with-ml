@@ -3,6 +3,11 @@
 ## **Objective**
 The primary objective of this analysis is to discover how to provide better actions for customers, such as offering personalized discounts, by leveraging customer segmentation and order prediction models.
 
+### **Dashboard Streamlit link:**
+```
+https://superstore-dashboard-with-ml.streamlit.app/
+```
+
 ---
 
 ## **Project Flows**
